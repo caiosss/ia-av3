@@ -1,119 +1,199 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-class GlobalRandomSearch:
-    def __init__(self, lim_inf=-2, lim_sup=4):
-        self.lim_inf = lim_inf
-        self.lim_sup = lim_sup
+
+class BaseAlgoritmo:
+    def __init__(self, funcao, dominio, modo='max'):
+        """
+        funcao: função f(x1, x2)
+        dominio: [(x1_min, x1_max), (x2_min, x2_max)]
+        modo: 'max' ou 'min'
+        """
+        self.funcao = funcao
+        self.modo = modo
+        self.lim_inf = np.array([dominio[0][0], dominio[1][0]], dtype=float)
+        self.lim_sup = np.array([dominio[0][1], dominio[1][1]], dtype=float)
+
+        self.x_best = None
+        self.f_best = None
+        self.it = 0
+        self.max_it = 1000
+        self.t_sem_melhoria = 50
+        self.sem_melhoria = 0
 
     def f(self, x):
-        return np.exp(-(x**2)) + 2*np.exp(-((x-2)**2))
+        return self.funcao(x[0], x[1])
+
+    def _is_better(self, f_new, f_old):
+        if self.modo == 'min':
+            return f_new < f_old
+        else:
+            return f_new > f_old
+
+class GlobalRandomSearch(BaseAlgoritmo):
+    def reset(self, max_it=1000, t_sem_melhoria=50):
+        self.max_it = max_it
+        self.t_sem_melhoria = t_sem_melhoria
+        self.x_best = np.random.uniform(self.lim_inf, self.lim_sup)
+        self.f_best = self.f(self.x_best)
+        self.it = 0
+        self.sem_melhoria = 0
+
+    def step(self):
+        if self.it >= self.max_it or self.sem_melhoria >= self.t_sem_melhoria:
+            return self.x_best, self.f_best, True
+
+        y = np.random.uniform(self.lim_inf, self.lim_sup)
+        f_y = self.f(y)
+
+        if self._is_better(f_y, self.f_best):
+            self.x_best = y
+            self.f_best = f_y
+            self.sem_melhoria = 0
+        else:
+            self.sem_melhoria += 1
+
+        self.it += 1
+        terminou = (self.it >= self.max_it) or (self.sem_melhoria >= self.t_sem_melhoria)
+        return self.x_best, self.f_best, terminou
 
     def execute(self, max_it=1000, t_sem_melhoria=50):
+        self.reset(max_it=max_it, t_sem_melhoria=t_sem_melhoria)
+        terminou = False
+        while not terminou:
+            _, _, terminou = self.step()
+        return self.x_best, self.f_best
 
-        x_best = np.random.uniform(self.lim_inf, self.lim_sup)
-        f_best = self.f(x_best)
-
-        sem_melhoria = 0
-
-        for it in range(max_it):
-
-            y = np.random.uniform(self.lim_inf, self.lim_sup)
-
-            f_y = self.f(y)
-
-            if f_y > f_best:
-                x_best = y
-                f_best = f_y
-                sem_melhoria = 0
-            else:
-                sem_melhoria += 1
-
-            if sem_melhoria >= t_sem_melhoria:
-                break
-
-        return x_best, f_best
-
-    def search(self, R=30, sigma=0.1, max_it=1000, t_sem_melhoria=50):
-
+    def search(self, R=30, max_it=1000, t_sem_melhoria=50):
         resultados = []
 
-        for r in range(R):
-            x, fx = self.execute(
-                sigma=sigma,
-                max_it=max_it,
-                t_sem_melhoria=t_sem_melhoria
-            )
+        for _ in range(R):
+            x, fx = self.execute(max_it=max_it,
+                                 t_sem_melhoria=t_sem_melhoria)
             resultados.append(fx)
 
         valores, contagens = np.unique(np.round(resultados, 4), return_counts=True)
         idx = np.argmax(contagens)
         melhor_frequentista = valores[idx]
 
-        print("\nResultados individuais:", resultados)
-        print("Resultado frequentista =", melhor_frequentista)
+        print("Global Random Search - resultados:", resultados)
+        print("Global Random Search - valor mais frequente:", melhor_frequentista)
 
         return melhor_frequentista, resultados
 
-class LocalRandomSearch:
-    def __init__(self, lim_inf=-2, lim_sup=4):
-        self.lim_inf = lim_inf
-        self.lim_sup = lim_sup
+class LocalRandomSearch(BaseAlgoritmo):
+    def reset(self, sigma=0.1, epsilon=0.1, max_it=1000, t_sem_melhoria=50):
+        self.sigma = sigma
+        self.epsilon = epsilon
+        self.max_it = max_it
+        self.t_sem_melhoria = t_sem_melhoria
+        self.x_best = np.random.uniform(self.lim_inf, self.lim_sup)
+        self.f_best = self.f(self.x_best)
+        self.it = 0
+        self.sem_melhoria = 0
 
-    def f(self, x):
-        return np.exp(-(x**2)) + 2*np.exp(-((x-2)**2))
+    def step(self):
+        if self.it >= self.max_it or self.sem_melhoria >= self.t_sem_melhoria:
+            return self.x_best, self.f_best, True
+
+        y = self.x_best + np.random.normal(0, self.sigma, size=2)
+
+        if np.any(np.abs(y - self.x_best) > self.epsilon):
+            self.sem_melhoria += 1
+        else:
+            y = np.clip(y, self.lim_inf, self.lim_sup)
+            f_y = self.f(y)
+
+            if self._is_better(f_y, self.f_best):
+                self.x_best = y
+                self.f_best = f_y
+                self.sem_melhoria = 0
+            else:
+                self.sem_melhoria += 1
+
+        self.it += 1
+        terminou = (self.it >= self.max_it) or (self.sem_melhoria >= self.t_sem_melhoria)
+        return self.x_best, self.f_best, terminou
 
     def execute(self, sigma=0.1, epsilon=0.1, max_it=1000, t_sem_melhoria=50):
-
-        x_best = np.random.uniform(self.lim_inf, self.lim_sup)
-        f_best = self.f(x_best)
-
-        sem_melhoria = 0
-
-        for it in range(max_it):
-            y = x_best + np.random.normal(0, sigma)
-
-            if abs(y - x_best) > epsilon:
-                continue
-
-            y = np.clip(y, self.lim_inf, self.lim_sup)
-
-            f_y = self.f(y)
-
-            if f_y > f_best:
-                x_best = y
-                f_best = f_y
-                sem_melhoria = 0
-            else:
-                sem_melhoria += 1
-
-            if sem_melhoria >= t_sem_melhoria:
-                break
-
-        return x_best, f_best
+        self.reset(sigma=sigma, epsilon=epsilon,
+                   max_it=max_it, t_sem_melhoria=t_sem_melhoria)
+        terminou = False
+        while not terminou:
+            _, _, terminou = self.step()
+        return self.x_best, self.f_best
 
     def search(self, R=30, sigma=0.1, epsilon=0.1, max_it=1000, t_sem_melhoria=50):
-
         resultados = []
 
-        for r in range(R):
-            x, fx = self.execute(
-                sigma=sigma,
-                epsilon=epsilon,
-                max_it=max_it,
-                t_sem_melhoria=t_sem_melhoria
-            )
+        for _ in range(R):
+            x, fx = self.execute(sigma=sigma,
+                                 epsilon=epsilon,
+                                 max_it=max_it,
+                                 t_sem_melhoria=t_sem_melhoria)
             resultados.append(fx)
 
         valores, contagens = np.unique(np.round(resultados, 4), return_counts=True)
         idx = np.argmax(contagens)
         melhor_frequentista = valores[idx]
 
-        print("Resultados individuais:", resultados)
-        print("Melhor resultado frequentista:", melhor_frequentista)
+        print("Local Random Search - resultados:", resultados)
+        print("Local Random Search - valor mais frequente:", melhor_frequentista)
 
         return melhor_frequentista, resultados
 
+class HillClimbing(BaseAlgoritmo):
+    def reset(self, epsilon=0.1, max_it=1000, t_sem_melhoria=50):
+        self.epsilon = epsilon
+        self.max_it = max_it
+        self.t_sem_melhoria = t_sem_melhoria
+        self.x_best = self.lim_inf.copy()
+        self.f_best = self.f(self.x_best)
+        self.it = 0
+        self.sem_melhoria = 0
+
+    def step(self):
+        if self.it >= self.max_it or self.sem_melhoria >= self.t_sem_melhoria:
+            return self.x_best, self.f_best, True
+        y = self.x_best + np.random.uniform(-self.epsilon, self.epsilon, size=2)
+        y = np.clip(y, self.lim_inf, self.lim_sup)
+
+        f_y = self.f(y)
+
+        if self._is_better(f_y, self.f_best):
+            self.x_best = y
+            self.f_best = f_y
+            self.sem_melhoria = 0
+        else:
+            self.sem_melhoria += 1
+
+        self.it += 1
+        terminou = (self.it >= self.max_it) or (self.sem_melhoria >= self.t_sem_melhoria)
+        return self.x_best, self.f_best, terminou
+
+    def execute(self, epsilon=0.1, max_it=1000, t_sem_melhoria=50):
+        self.reset(epsilon, max_it, t_sem_melhoria)
+        terminou = False
+        while not terminou:
+            _, _, terminou = self.step()
+        return self.x_best, self.f_best
+
+    def search(self, R=30, epsilon=0.1, max_it=1000, t_sem_melhoria=50):
+        resultados = []
+
+        for _ in range(R):
+            x, fx = self.execute(epsilon=epsilon,
+                                 max_it=max_it,
+                                 t_sem_melhoria=t_sem_melhoria)
+            resultados.append(fx)
+        valores, contagens = np.unique(np.round(resultados, 4), return_counts=True)
+        idx = np.argmax(contagens)
+        melhor_frequentista = valores[idx]
+
+        print("Hill Climbing - resultados:", resultados)
+        print("Hill Climbing - valor mais frequente:", melhor_frequentista)
+
+        return melhor_frequentista, resultados
 
 class TemperaSimulada:
   def __init__(self,max_it,epsilon, points, T, sigma):
@@ -165,58 +245,3 @@ class TemperaSimulada:
             plt.title("Tempera Simulada")
             plt.grid()
             it+=1
-
-class HillClimbing:
-    def __init__(self, lim_inf=-2, lim_sup=4):
-        self.lim_inf = lim_inf
-        self.lim_sup = lim_sup
-
-    def f(self, x):
-        return np.exp(-(x**2)) + 2*np.exp(-((x-2)**2))
-
-    def execute(self, epsilon=0.1, max_it=1000, t_sem_melhoria=50):
-
-        x_best = self.lim_inf
-        f_best = self.f(x_best)
-
-        sem_melhoria = 0
-
-        for it in range(max_it):
-            y = x_best + np.random.uniform(-epsilon, epsilon)
-            y = np.clip(y, self.lim_inf, self.lim_sup)
-
-            f_y = self.f(y)
-
-            if f_y > f_best:
-                x_best = y
-                f_best = f_y
-                sem_melhoria = 0
-            else:
-                sem_melhoria += 1
-
-            if sem_melhoria >= t_sem_melhoria:
-                break
-
-        return x_best, f_best
-
-    def search(self, R=30, epsilon=0.1, max_it=1000, t_sem_melhoria=50):
-
-        resultados = []
-
-        for r in range(R):
-            x, fx = self.execute(
-                epsilon=epsilon,
-                max_it=max_it,
-                t_sem_melhoria=t_sem_melhoria
-            )
-            resultados.append(fx)
-
-        valores, contagens = np.unique(np.round(resultados, 4), return_counts=True)
-        indice_max = np.argmax(contagens)
-        melhor_frequentista = valores[indice_max]
-
-        print("Resultados obtidos em R execuções:", resultados)
-        print("Valor mais frequente (frequentista):", melhor_frequentista)
-
-        return melhor_frequentista, resultados
-
