@@ -119,11 +119,11 @@ class HillClimbing(BaseAlgoritmo):
         return self.x_best, self.f_best, (self.it >= self.max_it or self.sem_melhoria >= self.t_sem_melhoria)
 
 class TemperaSimulada:
-    def __init__(self, max_it=3000, T=3.5, alpha=0.995):
+    def __init__(self, max_it=4000, T=12.0, alpha=0.9995):
         self.max_it = max_it
         self.T = T
         self.alpha = alpha
-        self.qtd = 8 
+        self.qtd = 8
         self.x_opt = np.random.randint(0, 8, size=8)
         self.f_opt = self.f(self.x_opt)
         self.historico = [self.f_opt]
@@ -132,7 +132,7 @@ class TemperaSimulada:
         ataques = 0
         for i in range(8):
             for j in range(i+1, 8):
-                if x[i] == x[j]:           
+                if x[i] == x[j]:
                     ataques += 1
                 if abs(x[i] - x[j]) == abs(i - j):
                     ataques += 1
@@ -140,10 +140,17 @@ class TemperaSimulada:
 
     def perturb(self):
         x_cand = np.copy(self.x_opt)
-        c1, c2 = np.random.choice(8, size=2, replace=False)
-        x_cand[c1], x_cand[c2] = x_cand[c2], x_cand[c1]
-        col = np.random.randint(0, 8)
-        x_cand[col] = np.random.randint(0, 8)
+        r = np.random.rand()
+        if r < 0.40:
+            col = np.random.randint(0, 8)
+            x_cand[col] = np.random.randint(0, 8)
+        elif r < 0.80:
+            c1, c2 = np.random.choice(8, 2, replace=False)
+            x_cand[c1], x_cand[c2] = x_cand[c2], x_cand[c1]
+        else:
+            cols = np.random.choice(8, 2, replace=False)
+            x_cand[cols[0]] = np.random.randint(0, 8)
+            x_cand[cols[1]] = np.random.randint(0, 8)
         return x_cand
 
     def search(self):
@@ -159,6 +166,8 @@ class TemperaSimulada:
             self.T *= self.alpha
             it += 1
 
+        if self.f_opt < 28:
+            return None, None
         return self.x_opt, self.f_opt
 
 
