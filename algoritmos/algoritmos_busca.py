@@ -119,55 +119,47 @@ class HillClimbing(BaseAlgoritmo):
         return self.x_best, self.f_best, (self.it >= self.max_it or self.sem_melhoria >= self.t_sem_melhoria)
 
 class TemperaSimulada:
-  def __init__(self,max_it,epsilon, points, T, sigma):
-        self.epsilon = epsilon
+    def __init__(self, max_it=3000, T=3.5, alpha=0.995):
         self.max_it = max_it
-        self.points = points
-        self.qtd = points.shape[0]
         self.T = T
-        self.sigma = sigma
-
-        #ótimo inicial:
-        self.x_opt = np.random.permutation(self.qtd-1)+1
-        self.x_opt = np.concatenate(([0],self.x_opt))
+        self.alpha = alpha
+        self.qtd = 8 
+        self.x_opt = np.random.randint(0, 8, size=8)
         self.f_opt = self.f(self.x_opt)
         self.historico = [self.f_opt]
 
-  def f(self,x):
-        d = 0
-        for i in range(self.qtd):
-            p1 = self.points[x[i]]
-            p2 = self.points[x[(i+1)%self.qtd]]
-            # d += np.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
-            d+= np.linalg.norm(p1-p2)
-        return d
-  
-  def perturb(self):
+    def f(self, x):
+        ataques = 0
+        for i in range(8):
+            for j in range(i+1, 8):
+                if x[i] == x[j]:           
+                    ataques += 1
+                if abs(x[i] - x[j]) == abs(i - j):
+                    ataques += 1
+        return 28 - ataques
+
+    def perturb(self):
         x_cand = np.copy(self.x_opt)
-        indexes1 = (np.random.permutation(self.qtd-1)+1)
-        indexes1 = indexes1[:self.epsilon]
-        indexes2 = np.random.permutation(indexes1)
-        x_cand[indexes1] = x_cand[indexes2]
+        c1, c2 = np.random.choice(8, size=2, replace=False)
+        x_cand[c1], x_cand[c2] = x_cand[c2], x_cand[c1]
+        col = np.random.randint(0, 8)
+        x_cand[col] = np.random.randint(0, 8)
         return x_cand
-  
-  def search(self):
+
+    def search(self):
         it = 0
-        while it < self.max_it:
+        while it < self.max_it and self.f_opt < 28:
             x_cand = self.perturb()
             f_cand = self.f(x_cand)
-            P_ij = np.exp(-((f_cand-self.f_opt))/self.T)
-
-            if f_cand < self.f_opt or P_ij >= np.random.uniform(0,1):
-                self.f_opt = f_cand
+            delta = f_cand - self.f_opt
+            if delta > 0 or np.random.rand() < np.exp(delta / self.T):
                 self.x_opt = x_cand
-
+                self.f_opt = f_cand
             self.historico.append(self.f_opt)
-            self.T = self.T*.98
-            plt.figure(4)
-            plt.plot(self.historico)
-            plt.title("Tempera Simulada")
-            plt.grid()
-            it+=1
+            self.T *= self.alpha
+            it += 1
+
+        return self.x_opt, self.f_opt
 
 
 def f1(x1, x2): return x1**2 + x2**2
