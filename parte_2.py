@@ -1,4 +1,3 @@
-import time
 from algoritmos.algoritmos_busca  import TemperaSimulada
 import matplotlib.pyplot as plt
 
@@ -26,7 +25,6 @@ def canonical(sol):
 
 if __name__ == "__main__":
     print("=== Buscando TODAS as 92 soluções do problema das 8 rainhas (DEBUG) ===")
-    inicio = time.time()
     solucoes = set()
     mapa = {}
     tentativas = 0
@@ -52,11 +50,9 @@ if __name__ == "__main__":
         if tentativas % 1000 == 0:
             print(f"tentativas={tentativas}  soluções={len(solucoes)}  tempo={(time.time()-inicio):.1f}s")
 
-    fim = time.time()
     print("\n=== RESULTADO FINAL ===")
     print("Total de soluções distintas encontradas:", len(solucoes))
     print("Tentativas executadas:", tentativas)
-    print(f"Tempo total: {fim - inicio:.2f} segundos")
     try:
         plt.figure(figsize=(10, 4))
         plt.plot(ts.historico)
